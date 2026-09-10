@@ -398,7 +398,7 @@
                         setAuthLoading(false);
                     }
                 };
-                    const handleResetPassword = async (e) => {
+                 const handleResetPassword = async (e) => {
         e.preventDefault();
         if (!email) {
             setAuthError('メールアドレスを入力してください。');
@@ -409,13 +409,26 @@
         setResetSuccess(false);
 
         try {
+            // 先にメールアドレスが登録されているかチェックする
+            const methods = await firebase.auth().fetchSignInMethodsForEmail(email);
+            
+            // methods が空配列なら登録されていない
+            if (methods.length === 0) {
+                setAuthError('このメールアドレスは登録されていません。');
+                return;
+            }
+
+            // 登録されている場合のみ、リセットメールを送信
             await firebase.auth().sendPasswordResetEmail(email);
             setResetSuccess(true);
         } catch (error) {
+            console.error("Reset Error:", error);
             switch (error.code) {
-                case 'auth/invalid-email': setAuthError('無効なメールアドレスの形式です。'); break;
-                case 'auth/user-not-found': setAuthError('このメールアドレスは登録されていません。'); break;
-                default: setAuthError('エラーが発生しました。時間を置いて再度お試しください。');
+                case 'auth/invalid-email': 
+                    setAuthError('無効なメールアドレスの形式です。'); 
+                    break;
+                default: 
+                    setAuthError('エラーが発生しました。時間を置いて再度お試しください。');
             }
         } finally {
             setAuthLoading(false);
@@ -590,7 +603,7 @@
                                 <p className="text-[10px] font-bold text-[#D4AF37] uppercase tracking-widest">Active Safe System</p>
                             </div>
 
-                           <div className="bg-white p-8 rounded-[40px] shadow-xl border border-gray-100 space-y-6 my-auto">
+                          <div className="w-full bg-white p-8 rounded-[40px] shadow-xl border border-gray-100 space-y-6 my-8">
     <div className="text-center">
         <h2 className="text-lg font-bold text-[#455A64]">
             {authMode === 'login' ? 'ワークスペースへサインイン' : authMode === 'register' ? '新しいアカウントを作成' : 'パスワードの再設定'}
