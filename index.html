@@ -55,7 +55,7 @@
                 return;
             }
 
-            const { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, Tooltip, CartesianGrid, Legend } = window.Recharts;
+            const { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, Legend, BarChart, Bar } = window.Recharts;
 
             const firebaseConfig = { 
                 apiKey: "AIzaSyBmq8Y8LiGU_HGmyiCFEjt8rN-enPn5zzw", 
@@ -139,6 +139,8 @@
                 const [assets, setAssets] = useState([]);
                 const [costs, setCosts] = useState({});
                 const [history, setHistory] = useState([]);
+                const [selectedHistoryId, setSelectedHistoryId] = useState(null);
+                const [expandedHistoryId, setExpandedHistoryId] = useState(null);
                 
                 const [isLocked, setIsLocked] = useState(false);
                 const [bioSupported, setBioSupported] = useState(false);
@@ -967,24 +969,81 @@
                             {/* 4. HISTORY */}
                             {activeTab === 'history' && (
                                 <div className="space-y-6 animate-pop">
-                                    <div className="bg-white p-8 rounded-[40px] shadow-sm border border-gray-100 text-center">
-                                        <div className="flex justify-between items-center mb-8"><h3 className="text-xs font-bold text-[#455A64] uppercase tracking-widest flex items-center gap-2 leading-none"><Icon name="history" /> 推移の記録</h3><button onClick={recordHistory} className="p-3 bg-[#455A64] text-white rounded-full shadow-lg active:scale-90 transition-all"><Icon name="camera" /></button></div>
-                                        {history.length > 0 ? (<div className="h-64 w-full"><ResponsiveContainer width="100%" height="100%"><AreaChart data={history}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f5f5f5" /><XAxis dataKey="dateLabel" axisLine={false} tickLine={false} tick={{fontSize: 10}} /><Tooltip formatter={(val) => (val/10000).toLocaleString() + '万'} /><Legend iconType="circle" />{Object.entries(ASSET_CATEGORIES).map(([name, info]) => (<Area key={name} type="monotone" dataKey={name} stackId="1" stroke={info.color} fill={info.color} fillOpacity={0.6} name={info.label} />))}</AreaChart></ResponsiveContainer></div>) : <div className="h-40 flex items-center justify-center border-2 border-dashed rounded-[32px] text-gray-300 text-[10px] uppercase font-bold tracking-widest">まだ記録がありません</div>}
+                                    {(() => {
+                                        const cats = Object.entries(ASSET_CATEGORIES);
+                                        const man = (v) => (v/10000).toLocaleString(undefined,{maximumFractionDigits:1})+'万';
+                                        const selected = history.find(h => h.id === selectedHistoryId) || history[history.length-1];
+                                        const prevOf = (rec) => { const i = history.findIndex(h => h.id === rec.id); return i > 0 ? history[i-1] : null; };
+                                        const diffTag = (d) => d === 0 ? <span className="text-gray-300">±0</span> : <span className={d>0?'text-emerald-500':'text-rose-400'}>{d>0?'+':'−'}{man(Math.abs(d))}</span>;
+                                        const breakdown = (rec) => {
+                                            const prev = prevOf(rec);
+                                            const rows = cats.map(([name, info]) => ({ name, info, val: rec[name]||0, diff: prev ? (rec[name]||0)-(prev[name]||0) : null })).filter(r => r.val > 0 || (r.diff||0) !== 0).sort((a,b)=>b.val-a.val);
+                                            const total = rec.total || rows.reduce((a,r)=>a+r.val,0) || 1;
+                                            return (
+                                                <div className="space-y-3">
+                                                    <div className="flex h-2.5 rounded-full overflow-hidden bg-gray-100">
+                                                        {rows.map(r => <div key={r.name} style={{width:(r.val/total*100)+'%', background:r.info.color}} />)}
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        {rows.map(r => (
+                                                            <div key={r.name} className="flex items-center justify-between text-xs">
+                                                                <div className="flex items-center gap-2 font-bold text-[#455A64]"><span className="w-2.5 h-2.5 rounded-full" style={{background:r.info.color}} />{r.name}<span className="text-[10px] text-gray-300 font-normal">{(r.val/total*100).toFixed(1)}%</span></div>
+                                                                <div className="text-right"><span className="font-bold text-[#455A64]">{man(r.val)}</span>{r.diff !== null && <span className="ml-2 text-[10px] font-bold">{diffTag(r.diff)}</span>}</div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            );
+                                        };
+                                        const ChartTooltip = ({ active, payload, label }) => {
+                                            if (!active || !payload || !payload.length) return null;
+                                            const rec = payload[0].payload;
+                                            return (
+                                                <div className="bg-white/95 backdrop-blur px-4 py-3 rounded-2xl shadow-xl border border-gray-100 text-xs min-w-[150px]">
+                                                    <div className="flex justify-between gap-4 mb-2 pb-2 border-b border-gray-100"><span className="font-bold text-gray-400">{label}</span><span className="font-bold text-[#455A64]">{man(rec.total)}</span></div>
+                                                    {payload.slice().reverse().filter(p => p.value > 0).map(p => (
+                                                        <div key={p.dataKey} className="flex justify-between gap-4 py-0.5"><span className="flex items-center gap-1.5 text-gray-500"><span className="w-2 h-2 rounded-full" style={{background:p.color}} />{p.dataKey}</span><span className="font-bold text-[#455A64]">{man(p.value)}</span></div>
+                                                    ))}
+                                                </div>
+                                            );
+                                        };
+                                        return (<>
+                                    <div className="bg-white p-6 rounded-[40px] shadow-sm border border-gray-100">
+                                        <div className="flex justify-between items-center mb-6 px-2"><h3 className="text-xs font-bold text-[#455A64] uppercase tracking-widest flex items-center gap-2 leading-none"><Icon name="history" /> 推移の記録</h3><button onClick={recordHistory} className="p-3 bg-[#455A64] text-white rounded-full shadow-lg active:scale-90 transition-all"><Icon name="camera" /></button></div>
+                                        {history.length > 0 ? (<>
+                                            <div className="h-64 w-full"><ResponsiveContainer width="100%" height="100%"><BarChart data={history} margin={{top:5,right:0,left:-12,bottom:0}} barCategoryGap="22%" onClick={(e) => { if (e && e.activePayload && e.activePayload[0]) setSelectedHistoryId(e.activePayload[0].payload.id); }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef1f3" /><XAxis dataKey="dateLabel" axisLine={false} tickLine={false} tick={{fontSize: 10, fill:'#94A3B8'}} /><YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill:'#94A3B8'}} tickFormatter={(v)=>v===0?'0':(v/10000).toLocaleString()+'万'} width={56} /><Tooltip content={<ChartTooltip />} cursor={{fill:'rgba(212,175,55,0.08)'}} />{cats.map(([name, info], i) => (<Bar key={name} dataKey={name} stackId="a" fill={info.color} name={info.label} radius={i===cats.length-1?[6,6,0,0]:0} />))}</BarChart></ResponsiveContainer></div>
+                                            <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-3">{cats.map(([name, info]) => (<span key={name} className="flex items-center gap-1 text-[10px] text-gray-400 font-bold"><span className="w-2 h-2 rounded-full" style={{background:info.color}} />{info.label}</span>))}</div>
+                                        </>) : <div className="h-40 flex items-center justify-center border-2 border-dashed rounded-[32px] text-gray-300 text-[10px] uppercase font-bold tracking-widest">まだ記録がありません</div>}
                                     </div>
+                                    {selected && (
+                                        <div className="bg-white p-6 rounded-[32px] shadow-sm border border-gray-100 space-y-4">
+                                            <div className="flex justify-between items-end">
+                                                <div><div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{selected.dateLabel} の内訳</div><div className="text-2xl font-bold text-[#455A64]">{formatYen(selected.total)}</div></div>
+                                                {prevOf(selected) && <div className="text-xs font-bold">前回比 {diffTag(selected.total - prevOf(selected).total)}</div>}
+                                            </div>
+                                            {breakdown(selected)}
+                                            <p className="text-[9px] text-gray-300 text-center">グラフの棒をタップするとその日の内訳を表示</p>
+                                        </div>
+                                    )}
                                     <div className="space-y-3">
                                         <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">過去のログ</h3>
                                         {history.slice().reverse().map(record => (
-                                            <div key={record.id} className="bg-white px-5 py-4 rounded-3xl flex justify-between items-center shadow-sm border border-gray-100">
-                                                <div>
-                                                    <span className="text-[10px] font-bold text-gray-400">{record.dateLabel}</span>
-                                                    <div className="text-sm font-bold text-[#455A64]">{formatYen(record.total)}</div>
+                                            <div key={record.id} className="bg-white px-5 py-4 rounded-3xl shadow-sm border border-gray-100">
+                                                <div className="flex justify-between items-center">
+                                                    <button className="flex-1 text-left" onClick={() => { setExpandedHistoryId(expandedHistoryId === record.id ? null : record.id); setSelectedHistoryId(record.id); }}>
+                                                        <span className="text-[10px] font-bold text-gray-400">{record.dateLabel}</span>
+                                                        <div className="text-sm font-bold text-[#455A64] flex items-center gap-2">{formatYen(record.total)}{prevOf(record) && <span className="text-[10px]">{diffTag(record.total - prevOf(record).total)}</span>}</div>
+                                                    </button>
+                                                    <button onClick={() => setConfirmDelete({ isOpen: true, type: 'history', id: record.id, name: `${record.dateLabel}の記録` })} className="text-gray-200 hover:text-red-400 p-2">
+                                                        <Icon name="trash-2" className="w-4 h-4" />
+                                                    </button>
                                                 </div>
-                                                <button onClick={() => setConfirmDelete({ isOpen: true, type: 'history', id: record.id, name: `${record.dateLabel}の記録` })} className="text-gray-200 hover:text-red-400 p-2">
-                                                    <Icon name="trash-2" className="w-4 h-4" />
-                                                </button>
+                                                {expandedHistoryId === record.id && <div className="mt-4 pt-4 border-t border-gray-50">{breakdown(record)}</div>}
                                             </div>
                                         ))}
                                     </div>
+                                        </>);
+                                    })()}
                                 </div>
                             )}
                         </main>
