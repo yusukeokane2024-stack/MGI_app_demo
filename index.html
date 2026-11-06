@@ -141,6 +141,7 @@
                 const [history, setHistory] = useState([]);
                 const [selectedHistoryId, setSelectedHistoryId] = useState(null);
                 const [expandedHistoryId, setExpandedHistoryId] = useState(null);
+                const [expandedCats, setExpandedCats] = useState({});
                 
                 const [isLocked, setIsLocked] = useState(false);
                 const [bioSupported, setBioSupported] = useState(false);
@@ -562,7 +563,7 @@
 
                 const recordHistory = async () => {
                     if (totals.total === 0) return;
-                    const snap = { total: totals.total, timestamp: Date.now(), dateLabel: (new Date().getMonth()+1)+"/"+new Date().getDate(), ...Object.keys(ASSET_CATEGORIES).reduce((acc, cat) => ({...acc, [cat]: totals[cat]||0}), {}) };
+                    const snap = { total: totals.total, timestamp: Date.now(), items: assets.map(a => ({ name: a.name || '', amount: a.amount || 0, category: a.category })), dateLabel: (new Date().getMonth()+1)+"/"+new Date().getDate(), ...Object.keys(ASSET_CATEGORIES).reduce((acc, cat) => ({...acc, [cat]: totals[cat]||0}), {}) };
                     if (isDemoMode) {
                         const nextHistory = [...history, { id: 'local-h-' + Date.now(), ...snap }];
                         setHistory(nextHistory); saveLocalData('mgi_history', nextHistory);
@@ -985,12 +986,33 @@
                                                         {rows.map(r => <div key={r.name} style={{width:(r.val/total*100)+'%', background:r.info.color}} />)}
                                                     </div>
                                                     <div className="space-y-2">
-                                                        {rows.map(r => (
-                                                            <div key={r.name} className="flex items-center justify-between text-xs">
-                                                                <div className="flex items-center gap-2 font-bold text-[#455A64]"><span className="w-2.5 h-2.5 rounded-full" style={{background:r.info.color}} />{r.name}<span className="text-[10px] text-gray-300 font-normal">{(r.val/total*100).toFixed(1)}%</span></div>
-                                                                <div className="text-right"><span className="font-bold text-[#455A64]">{man(r.val)}</span>{r.diff !== null && <span className="ml-2 text-[10px] font-bold">{diffTag(r.diff)}</span>}</div>
-                                                            </div>
-                                                        ))}
+                                                        {rows.map(r => {
+                                                            const key = rec.id + ':' + r.name;
+                                                            const open = !!expandedCats[key];
+                                                            const items = (rec.items || []).filter(it => it.category === r.name).sort((a,b)=>b.amount-a.amount);
+                                                            const prevItems = prev && prev.items ? prev.items : null;
+                                                            return (
+                                                                <div key={r.name}>
+                                                                    <button onClick={() => setExpandedCats({...expandedCats, [key]: !open})} className="w-full flex items-center justify-between text-xs">
+                                                                        <div className="flex items-center gap-2 font-bold text-[#455A64]"><span className="w-2.5 h-2.5 rounded-full" style={{background:r.info.color}} />{r.name}<span className="text-[10px] text-gray-300 font-normal">{(r.val/total*100).toFixed(1)}%</span><span className="text-[10px] text-gray-300">{open ? '▲' : '▼'}</span></div>
+                                                                        <div className="text-right"><span className="font-bold text-[#455A64]">{man(r.val)}</span>{r.diff !== null && <span className="ml-2 text-[10px] font-bold">{diffTag(r.diff)}</span>}</div>
+                                                                    </button>
+                                                                    {open && (
+                                                                        <div className="mt-2 ml-4 pl-3 border-l-2 space-y-1.5" style={{borderColor:r.info.color}}>
+                                                                            {items.length === 0 ? <div className="text-[10px] text-gray-300">この記録には明細がありません（明細は今後の記録から保存されます）</div> : items.map((it, i) => {
+                                                                                const pv = prevItems ? prevItems.find(x => x.name === it.name && x.category === it.category) : null;
+                                                                                return (
+                                                                                    <div key={i} className="flex items-center justify-between text-[11px]">
+                                                                                        <span className="text-gray-500 truncate pr-2">{it.name || '(名称なし)'}</span>
+                                                                                        <span className="shrink-0"><span className="font-bold text-[#455A64]">{man(it.amount)}</span><span className="ml-1.5 text-[9px] text-gray-300">{(it.amount/r.val*100).toFixed(0)}%</span>{prevItems && <span className="ml-1.5 text-[10px] font-bold">{pv ? diffTag(it.amount - pv.amount) : <span className="text-sky-400">NEW</span>}</span>}</span>
+                                                                                    </div>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
                                                     </div>
                                                 </div>
                                             );
@@ -1022,7 +1044,7 @@
                                                 {prevOf(selected) && <div className="text-xs font-bold">前回比 {diffTag(selected.total - prevOf(selected).total)}</div>}
                                             </div>
                                             {breakdown(selected)}
-                                            <p className="text-[9px] text-gray-300 text-center">グラフの棒をタップするとその日の内訳を表示</p>
+                                            <p className="text-[9px] text-gray-300 text-center">棒をタップでその日の内訳、カテゴリをタップで明細を表示</p>
                                         </div>
                                     )}
                                     <div className="space-y-3">
